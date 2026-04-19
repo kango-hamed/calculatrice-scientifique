@@ -3,7 +3,7 @@
 
 /**
  * Module : basen
- * Calcul en base N — mode BASE-N, conversions, opérateurs logiques
+ * Calcul en base N— mode BASE-N, conversions, opérateurs logiques
  *
  * Groupe responsable : (à compléter)
  * NE PAS MODIFIER ce fichier sans accord du groupe responsable
