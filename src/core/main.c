@@ -2,9 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "tokenizer.h"
-#include "parser.h"
-#include "evaluator.h"
+
+
+#include "core.h"
 #include <math.h>
 
 #define MAX_EXPR  512
