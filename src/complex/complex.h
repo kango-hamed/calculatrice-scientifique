@@ -1,20 +1,57 @@
-#ifndef CALC_COMPLEX_H
-#define CALC_COMPLEX_H
+#ifndef COMPLEX_H
+#define COMPLEX_H
 
-/**
- * Module : complex
- * Nombres complexes — mode CMPLX, opérations, conversions polaires
- *
- * Groupe responsable : (à compléter)
- * NE PAS MODIFIER ce fichier sans accord du groupe responsable
- * et validation du chef de projet. Toute demande de modification
- * passe par une GitHub Issue avec le label "interface".
- */
+#include <stdio.h>
 
-typedef struct { double re; double im; } Complex;
-Complex  cx_add(Complex a, Complex b);
-Complex  cx_mul(Complex a, Complex b);
-double   cx_mod(Complex a);
-double   cx_arg(Complex a);
+/* =========================
+   STRUCTURES
+========================= */
 
-#endif /* CALC_COMPLEX_H */
+typedef struct {
+    double real;
+    double imag;
+} Complex;
+
+typedef struct {
+    double r;
+    double theta;
+} Polar;
+
+/* =========================
+   CREATION
+========================= */
+
+Complex complex_create(double real, double imag);
+
+/* =========================
+   OPERATIONS DE BASE
+========================= */
+
+Complex complex_add(Complex a, Complex b);
+Complex complex_sub(Complex a, Complex b);
+Complex complex_mul(Complex a, Complex b);
+Complex complex_div(Complex a, Complex b);
+
+/* =========================
+   PROPRIETES
+========================= */
+
+double complex_modulus(Complex z);
+double complex_argument(Complex z);
+Complex complex_conjugate(Complex z);
+
+/* =========================
+   CONVERSIONS
+========================= */
+
+Polar complex_to_polar(Complex z);
+Complex polar_to_complex(Polar p);
+
+/* =========================
+   AFFICHAGE
+========================= */
+
+void complex_print(Complex z);
+void polar_print(Polar p);
+
+#endif
