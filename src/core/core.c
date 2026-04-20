@@ -1,6 +1,37 @@
 #include "core.h"
 
 /* =========================================================
+ * errors.c -- Definitions des fonctions de gestion d'erreurs
+ * ========================================================= */
+
+const char *error_message(CalcError err) {
+    switch (err) {
+        case ERR_NONE:      return "OK";
+        case ERR_SYNTAX:    return "Syntax ERROR";
+        case ERR_MATH:      return "Math ERROR";
+        case ERR_STACK:     return "Stack ERROR";
+        case ERR_ARGUMENT:  return "Argument ERROR";
+        case ERR_MEMORY:    return "Memory ERROR";
+        case ERR_DIV_ZERO:  return "Math ERROR: division par zero";
+        case ERR_DOMAIN:    return "Math ERROR: domaine invalide";
+        case ERR_OVERFLOW:  return "Math ERROR: depassement de plage";
+        default:            return "Erreur inconnue";
+    }
+}
+
+void error_print(CalcError err, const char *expr, int position) {
+    fprintf(stderr, "\n");
+    if (expr) fprintf(stderr, "  %s\n", expr);
+    if (position >= 0 && expr) {
+        int i;
+        fprintf(stderr, "  ");
+        for (i = 0; i < position; i++) fprintf(stderr, " ");
+        fprintf(stderr, "^\n");
+    }
+    fprintf(stderr, "  [%s]\n\n", error_message(err));
+}
+
+/* =========================================================
  * tokenizer.c -- Decoupage de l'expression en tokens
  * ========================================================= */
 
@@ -88,7 +119,6 @@ CalcError tokenize(const char *expr, Token *out, int *count, int *err_pos) {
             t.value = strtod(&expr[i], &end);
             i = (int)(end - expr);
             out[n++] = t;
-
             if (i < len) {
                 int is_alpha = isalpha((unsigned char)expr[i]);
                 int is_lpar  = expr[i] == '(';
@@ -134,7 +164,6 @@ CalcError tokenize(const char *expr, Token *out, int *count, int *err_pos) {
             case '%': t.type = TOK_MOD;    break;
             case ',': t.type = TOK_COMMA;  break;
             case '=': t.type = TOK_ASSIGN; break;
-
             case '-':
                 if (n == 0                     ||
                     out[n-1].type == TOK_PLUS   ||
@@ -151,15 +180,12 @@ CalcError tokenize(const char *expr, Token *out, int *count, int *err_pos) {
                 }
                 t.type = TOK_MINUS;
                 break;
-
             case '(':
                 if (needs_implicit_mul(out, n))
                     if (!insert_implicit_mul(out, &n, i)) { *err_pos = i; return ERR_SYNTAX; }
                 t.type = TOK_LPAREN;
                 break;
-
             case ')': t.type = TOK_RPAREN; break;
-
             default:
                 *err_pos = i;
                 return ERR_SYNTAX;

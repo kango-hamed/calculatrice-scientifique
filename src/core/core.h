@@ -24,32 +24,9 @@ typedef enum {
     ERR_OVERFLOW      /* depassement de plage           */
 } CalcError;
 
-static inline const char *error_message(CalcError err) {
-    switch (err) {
-        case ERR_NONE:      return "OK";
-        case ERR_SYNTAX:    return "Syntax ERROR";
-        case ERR_MATH:      return "Math ERROR";
-        case ERR_STACK:     return "Stack ERROR";
-        case ERR_ARGUMENT:  return "Argument ERROR";
-        case ERR_MEMORY:    return "Memory ERROR";
-        case ERR_DIV_ZERO:  return "Math ERROR: division par zero";
-        case ERR_DOMAIN:    return "Math ERROR: domaine invalide";
-        case ERR_OVERFLOW:  return "Math ERROR: depassement de plage";
-        default:            return "Erreur inconnue";
-    }
-}
-
-static inline void error_print(CalcError err, const char *expr, int position) {
-    fprintf(stderr, "\n");
-    if (expr) fprintf(stderr, "  %s\n", expr);
-    if (position >= 0 && expr) {
-        int i;
-        fprintf(stderr, "  ");
-        for (i = 0; i < position; i++) fprintf(stderr, " ");
-        fprintf(stderr, "^\n");
-    }
-    fprintf(stderr, "  [%s]\n\n", error_message(err));
-}
+/* Declarations uniquement -- definitions dans core.c */
+const char *error_message(CalcError err);
+void        error_print(CalcError err, const char *expr, int position);
 
 /* =========================================================
  * token.h -- Types lexicaux partages entre tokenizer/parser
@@ -120,7 +97,6 @@ void     ast_free         (ASTNode *node);
 
 /* =========================================================
  * tokenizer.h -- Decoupage de l'expression en tokens
- * Exigences : F-CO-01, F-CO-03, F-CO-05
  * ========================================================= */
 
 #define MAX_TOKENS 256
@@ -129,16 +105,6 @@ CalcError tokenize(const char *expr, Token *out, int *count, int *err_pos);
 
 /* =========================================================
  * parser.h -- Analyseur syntaxique par descente recursive
- *
- * Grammaire (du moins au plus prioritaire) :
- *   expression -> term    (('+' | '-') term)*
- *   term       -> power   (('*' | '/' | '%') power)*
- *   power      -> unary   ('^' power)*          [assoc. droite]
- *   unary      -> '-' unary | primary
- *   primary    -> NUMBER | VARIABLE ['=' expression]
- *              |  FUNCTION '(' args ')'
- *              |  '(' expression ')'
- *   args       -> expression (',' expression)*
  * ========================================================= */
 
 typedef struct {
@@ -156,7 +122,6 @@ void     parser_print_error(const Parser *p);
 
 /* =========================================================
  * evaluator.h -- Evaluation de l'AST
- * Exigences : F-CO-07 a F-CO-10, F-FN-01 a F-FN-22
  * ========================================================= */
 
 #define NB_VARS 26   /* variables A-Z */
