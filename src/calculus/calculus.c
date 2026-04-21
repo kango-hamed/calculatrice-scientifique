@@ -83,18 +83,6 @@ double fn_integral(const char *expr, double a, double b) {
     return sum;
 }
 
-/* dérivée numérique */
-double fn_derivative(const char *expr, double x) {
-    (void)expr;
-
-    double h = 1e-6;
-
-    /* f(x) = x² */
-    double f1 = (x + h) * (x + h);
-    double f0 = (x - h) * (x - h);
-
-    return (f1 - f0) / (2 * h);
-}
 
 /* somme discrète */
 double fn_sum(const char *expr, int start, int end) {

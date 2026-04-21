@@ -28,7 +28,6 @@ int solve_quadratic(double a, double b, double c, double *x1, double *x2);
  * expr est une chaîne (ex: "x*x + 2*x")
  */
 double fn_integral(const char *expr, double a, double b);
-double fn_derivative(const char *expr, double x);
 double fn_sum(const char *expr, int start, int end);
 
 #endif /* CALCULUS_H */
