@@ -24,9 +24,41 @@ typedef enum {
     ERR_OVERFLOW      /* depassement de plage           */
 } CalcError;
 
-/* Declarations uniquement -- definitions dans core.c */
 const char *error_message(CalcError err);
 void        error_print(CalcError err, const char *expr, int position);
+
+/* =========================================================
+ * Modes de la calculatrice
+ * ========================================================= */
+typedef enum {
+    MODE_COMP,      /* Mode calcul standard          */
+    MODE_CMPLX,     /* Mode nombres complexes        */
+    MODE_STAT,      /* Mode statistiques             */
+    MODE_MATRIX,    /* Mode matrices                 */
+    MODE_TABLE,     /* Mode table de valeurs         */
+    MODE_BASE_N,    /* Mode base-n                   */
+    MODE_EQN        /* Mode equations                */
+} CalcMode;
+
+/* =========================================================
+ * ComplexValue -- Type de base pour tous les nombres
+ * ========================================================= */
+
+typedef struct {
+    double re;    /* partie reelle      */
+    double im;    /* partie imaginaire  */
+} ComplexValue;
+
+/* Fonctions utilitaires complexes */
+ComplexValue cx_make (double re, double im);
+ComplexValue cx_add  (ComplexValue a, ComplexValue b);
+ComplexValue cx_sub  (ComplexValue a, ComplexValue b);
+ComplexValue cx_mul  (ComplexValue a, ComplexValue b);
+ComplexValue cx_div  (ComplexValue a, ComplexValue b);
+ComplexValue cx_conj (ComplexValue a);
+double       cx_mod  (ComplexValue a);
+double       cx_arg  (ComplexValue a);
+int          cx_is_real(ComplexValue a);
 
 /* =========================================================
  * token.h -- Types lexicaux partages entre tokenizer/parser
@@ -34,6 +66,7 @@ void        error_print(CalcError err, const char *expr, int position);
 
 typedef enum {
     TOK_NUMBER,     /* 3.14, 42                    */
+    TOK_IMAG,       /* unite imaginaire 'i'        */  /* ADDED */
     TOK_PLUS,       /* +                           */
     TOK_MINUS,      /* -                           */
     TOK_MUL,        /* * ou x                      */
@@ -50,14 +83,21 @@ typedef enum {
     TOK_OR,         /* or   operateur logique OU   */
     TOK_XOR,        /* xor  ou-exclusif            */
     TOK_XNOR,       /* xnor non-ou-exclusif        */
+    TOK_SQUARE,     /* x² (postfixe)               */
+    TOK_CUBE,       /* x³ (postfixe)               */
+    TOK_INV,        /* x⁻¹ (postfixe)              */
+    TOK_FACT,       /* n! (postfixe)               */
+    TOK_NPR,        /* nPr (permutation)           */
+    TOK_NCR,        /* nCr (combinaison)           */
     TOK_END         /* fin de l'expression         */
 } TokenType;
 
 typedef struct {
     TokenType type;
-    double    value;       /* si TOK_NUMBER           */
-    char      name[32];    /* si TOK_FUNCTION/VARIABLE */
-    int       position;    /* position dans la chaine  */
+    double    value;     /* si TOK_NUMBER : valeur reelle         */
+                         /* si TOK_IMAG   : toujours 1.0          */
+    char      name[32];  /* si TOK_FUNCTION/VARIABLE : nom        */
+    int       position;  /* position dans la chaine d'expression  */
 } Token;
 
 /* =========================================================
@@ -65,21 +105,23 @@ typedef struct {
  * ========================================================= */
 
 typedef enum {
-    NODE_NUMBER,    /* feuille : valeur numerique     */
-    NODE_VARIABLE,  /* feuille : variable (A-Y, Ans)  */
-    NODE_BINOP,     /* noeud : operateur binaire      */
-    NODE_UNARYOP,   /* noeud : operateur unaire (neg) */
-    NODE_FUNCTION,  /* noeud : appel de fonction      */
-    NODE_ASSIGN     /* noeud : affectation A = expr   */
+    NODE_NUMBER,    /* feuille : valeur numerique reelle  */
+    NODE_IMAG,      /* feuille : unite imaginaire (0+1i)  */  /* ADDED */
+    NODE_VARIABLE,  /* feuille : variable (A-Z, Ans)      */
+    NODE_BINOP,     /* noeud : operateur binaire          */
+    NODE_UNARYOP,   /* noeud : operateur unaire (neg)     */
+    NODE_FUNCTION,  /* noeud : appel de fonction          */
+    NODE_ASSIGN     /* noeud : affectation A = expr       */
 } NodeType;
 
 typedef struct ASTNode {
     NodeType        type;
-    double          value;      /* NODE_NUMBER   : la valeur          */
-    char            name[32];   /* NODE_VARIABLE : nom                */
+    double          value;      /* NODE_NUMBER : valeur scalaire      */
+                                /* NODE_IMAG   : coefficient imag (1) */
+    char            name[32];   /* NODE_VARIABLE : nom var            */
                                 /* NODE_FUNCTION : nom fonction       */
-                                /* NODE_BINOP    : operateur (+,-...) */
-                                /* NODE_ASSIGN   : nom variable       */
+                                /* NODE_BINOP    : operateur char      */
+                                /* NODE_ASSIGN   : nom variable cible  */
     struct ASTNode *left;       /* enfant gauche / operande 1         */
     struct ASTNode *right;      /* enfant droit  / operande 2         */
     struct ASTNode **args;      /* arguments fonction                 */
@@ -127,14 +169,21 @@ void     parser_print_error(const Parser *p);
 #define NB_VARS 26   /* variables A-Z */
 
 typedef struct {
-    double vars[NB_VARS];  /* variables A-Z              */
-    double mem_M;          /* memoire independante M     */
-    double ans;            /* derniere reponse (Ans)     */
-    int    angle_deg;      /* 1 = degres, 0 = radians    */
+    ComplexValue vars[NB_VARS];  /* variables A-Z (peuvent etre complexes) */
+    ComplexValue mem_M;          /* memoire independante M                 */
+    ComplexValue ans;            /* derniere reponse (Ans)                 */
+    int          angle_deg;      /* 1 = degres, 0 = radians                */
+    int          complex_mode;   /* 1 = mode complexe actif                */
+    CalcMode     current_mode; /* Mode actif de la calculatrice          */
 } CalcMemory;
 
 void      eval_memory_init (CalcMemory *mem);
-CalcError eval             (const ASTNode *node, CalcMemory *mem, double *result);
-void      eval_print_result(double result);
+CalcError eval             (const ASTNode *node, CalcMemory *mem, ComplexValue *result);
+void      eval_print_result(ComplexValue result, int complex_mode);
+
+/* Vérification des fonctions par mode */
+int is_function_valid_for_mode(const char *func_name, CalcMode mode);
+CalcMode detect_mode_from_expr(const char *expr);
+const char *mode_name(CalcMode mode);
 
 #endif /* CALC_CORE_H */

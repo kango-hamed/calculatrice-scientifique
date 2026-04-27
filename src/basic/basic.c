@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
-#include "calc_basic.h"
+#include "basic.h"
 
 /* ========================= */
 /* Fraction                  */

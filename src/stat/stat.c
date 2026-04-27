@@ -14,6 +14,15 @@ static double stat_y[STAT_MAX_N];
 static double stat_freq[STAT_MAX_N];
 static int stat_n = 0;
 static int stat_n2 = 0;
+static int current_regression_type = REGRESSION_LINEAR;
+
+void stat_set_regression_type(int type) {
+    current_regression_type = type;
+}
+
+int stat_get_regression_type(void) {
+    return current_regression_type;
+}
 
 static double safe_freq_value(const double *freq, int i) {
     return freq == NULL ? 1.0 : freq[i];
@@ -444,6 +453,15 @@ double normal_Q(double t) {
     return 1.0 - normal_P(t);
 }
 
+double stat_var(void) {
+    double sd = stat_stddev_samp();
+    return sd * sd;
+}
+
+int stat_count(void) {
+    return stat_n;
+}
+
 double normalize(double x) {
     double mean = stat_mean();
     double sd = stat_stddev_pop();
@@ -451,4 +469,25 @@ double normalize(double x) {
         return 0.0;
     }
     return (x - mean) / sd;
+}
+
+double stat_reg_A(int type) {
+    double coef[3] = {0, 0, 0};
+    regression(type, stat_x, stat_y, stat_freq, stat_n, coef, (type == REGRESSION_QUAD) ? 3 : 2);
+    return coef[0];
+}
+
+double stat_reg_B(int type) {
+    double coef[3] = {0, 0, 0};
+    regression(type, stat_x, stat_y, stat_freq, stat_n, coef, (type == REGRESSION_QUAD) ? 3 : 2);
+    return coef[1];
+}
+
+double stat_reg_C(int type) {
+    double coef[3] = {0, 0, 0};
+    if (type == REGRESSION_QUAD) {
+        regression(type, stat_x, stat_y, stat_freq, stat_n, coef, 3);
+        return coef[2];
+    }
+    return 0.0;
 }

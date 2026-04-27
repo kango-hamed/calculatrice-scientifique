@@ -31,10 +31,18 @@ double stat_stddev_pop(void);
 double stat_stddev_samp(void);
 double stat_min(void);
 double stat_max(void);
+double stat_var(void);
+int stat_count(void);
 double normalize(double x);
 double normal_P(double t);
 double normal_Q(double t);
 double normal_R(double t);
+double stat_reg_A(int type);
+double stat_reg_B(int type);
+double stat_reg_C(int type);
+
+void stat_set_regression_type(int type);
+int stat_get_regression_type(void);
 
 int regression(int type,
                const double *x,
