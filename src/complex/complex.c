@@ -2,26 +2,26 @@
 #include <math.h>
 
 ComplexValue cx_make(double re, double im) {
-    ComplexValue c; c.re = re; c.im = im; return c;
+    ComplexValue c; memset(&c, 0, sizeof(c)); c.re = re; c.im = im; return c;
 }
 
 ComplexValue cx_add(ComplexValue a, ComplexValue b) {
-    ComplexValue c; c.re = a.re + b.re; c.im = a.im + b.im; return c;
+    ComplexValue c; memset(&c, 0, sizeof(c)); c.re = a.re + b.re; c.im = a.im + b.im; return c;
 }
 
 ComplexValue cx_sub(ComplexValue a, ComplexValue b) {
-    ComplexValue c; c.re = a.re - b.re; c.im = a.im - b.im; return c;
+    ComplexValue c; memset(&c, 0, sizeof(c)); c.re = a.re - b.re; c.im = a.im - b.im; return c;
 }
 
 ComplexValue cx_mul(ComplexValue a, ComplexValue b) {
-    ComplexValue c;
+    ComplexValue c; memset(&c, 0, sizeof(c));
     c.re = a.re * b.re - a.im * b.im;
     c.im = a.re * b.im + a.im * b.re;
     return c;
 }
 
 ComplexValue cx_div(ComplexValue a, ComplexValue b) {
-    ComplexValue c;
+    ComplexValue c; memset(&c, 0, sizeof(c));
     double denom = b.re * b.re + b.im * b.im;
     if (denom == 0.0) return cx_make(0.0, 0.0);
     c.re = (a.re * b.re + a.im * b.im) / denom;
@@ -30,7 +30,7 @@ ComplexValue cx_div(ComplexValue a, ComplexValue b) {
 }
 
 ComplexValue cx_conj(ComplexValue a) {
-    ComplexValue c; c.re = a.re; c.im = -a.im; return c;
+    ComplexValue c; memset(&c, 0, sizeof(c)); c.re = a.re; c.im = -a.im; return c;
 }
 
 double cx_mod(ComplexValue a) {
@@ -46,7 +46,7 @@ int cx_is_real(ComplexValue a) {
 }
 
 ComplexValue cx_from_polar(double mod, double arg) {
-    return cx_make(mod * cos(arg), mod * sin(arg));
+    ComplexValue c; memset(&c, 0, sizeof(c)); c = cx_make(mod * cos(arg), mod * sin(arg)); return c;
 }
 
 void pol_to_rec(double r, double theta, double *x, double *y) {

@@ -7,9 +7,13 @@
 #include "core.h"
 #include <math.h>
 #include "stat.h"
+#include "eqn.h"
+#include "table.h"
 
 #define MAX_EXPR  512
 #define HIST_SIZE 20
+
+static int basen_active_base = 10;
 
 /* CalcMode est défini dans core.h */
 /* mode_name() est défini dans core.c */
@@ -76,7 +80,14 @@ static void print_functions_for_mode(CalcMode mode) {
             break;
         case MODE_MATRIX:
             printf("\n  Fonctions matricielles :\n");
-            printf("    det, tr, inv, dim, trans\n");
+            printf("    det(MatA)       Determinant\n");
+            printf("    tr(MatA)        Trace\n");
+            printf("    inv(MatA)       Inverse\n");
+            printf("    trans(MatA)     Transposee\n");
+            printf("  Variables matricielles :\n");
+            printf("    MatA, MatB, MatC\n");
+            printf("  Operations directes : MatA * MatB, MatA + MatC...\n");
+            printf("  Pour re-editer une matrice, retapez 'mode mat'.\n");
             break;
         case MODE_BASE_N:
             printf("\n  Operateurs et fonctions Base-N :\n");
@@ -125,22 +136,40 @@ static void cmd_help_general(void) {
     printf("\n");
 }
 
+static int cmd_set_mode(const char *modename, CalcMemory *mem);
+
 static void cmd_show_mode(CalcMemory *mem) {
-    printf("\n  Mode actuel : %s\n", mode_name(mem->current_mode));
-    printf("  Modes disponibles :\n");
-    printf("    comp   - Calcul standard (COMP)\n");
-    printf("    cmplx  - Nombres complexes (CMPLX)\n");
-    printf("    stat   - Statistiques (STAT)\n");
-    printf("    mat    - Matrices (MAT)\n");
-    printf("    table  - Table de valeurs (TABLE)\n");
-    printf("    basen  - Base-N (BASE-N)\n");
-    printf("    eqn    - Equations (EQN)\n\n");
+    printf("\n  === SELECTION DU MODE ===\n");
+    printf("  1: COMP     2: CMPLX\n");
+    printf("  3: STAT     4: BASE-N\n");
+    printf("  5: EQN      6: MATRIX\n");
+    printf("  7: TABLE\n");
+    printf("  8: Annuler\n");
+    printf("  > ");
+    fflush(stdout);
+
+    char line[64];
+    if (fgets(line, sizeof(line), stdin)) {
+        int choice = atoi(line);
+        switch (choice) {
+            case 1: cmd_set_mode("comp", mem); break;
+            case 2: cmd_set_mode("cmplx", mem); break;
+            case 3: cmd_set_mode("stat", mem); break;
+            case 4: cmd_set_mode("basen", mem); break;
+            case 5: cmd_set_mode("eqn", mem); break;
+            case 6: cmd_set_mode("mat", mem); break;
+            case 7: cmd_set_mode("table", mem); break;
+            default: printf("  Mode inchange.\n"); break;
+        }
+    }
 }
 
 static void interactive_stat_editor(void) {
     char line[256];
     int mode = 0;
 
+    printf("\033[H\033[J"); /* Effacer l'ecran */
+    printf("\n  === Editeur de Statistiques ===\n");
     printf("  Choisissez le type d'analyse STAT :\n");
     printf("  1) 1-VAR (Une seule variable X)\n");
     printf("  2) A+BX  (Regression lineaire)\n");
@@ -208,6 +237,221 @@ static void interactive_stat_editor(void) {
     printf("  %d ligne(s) enregistree(s).\n", count - 1);
 }
 
+static void interactive_matrix_editor(CalcMemory *mem) {
+    char line[256];
+    int choice = 0;
+
+    while (1) {
+        printf("\033[H\033[J"); /* Effacer l'ecran */
+        printf("\n  === Editeur de Matrices ===\n");
+        printf("  1) Definir MatA\n");
+        printf("  2) Definir MatB\n");
+        printf("  3) Definir MatC\n");
+        printf("  4) Quitter l'editeur (retour au prompt de calcul)\n");
+        printf("  > ");
+        fflush(stdout);
+
+        if (!fgets(line, sizeof(line), stdin)) break;
+        choice = atoi(line);
+
+        if (choice == 4 || choice == 0) break;
+
+        if (choice >= 1 && choice <= 3) {
+            int mat_idx = choice - 1;
+            int rows = 0, cols = 0;
+            printf("  Dimensions (Lignes Colonnes, ex: 3 3) (Max 4x4) > ");
+            fflush(stdout);
+            if (!fgets(line, sizeof(line), stdin)) break;
+            char *comma = strchr(line, ',');
+            if (comma) *comma = ' ';
+            if (sscanf(line, "%d %d", &rows, &cols) != 2 || rows <= 0 || cols <= 0 || rows > 4 || cols > 4) {
+                printf("  Dimensions invalides.\n");
+                continue;
+            }
+            
+            ComplexValue cv;
+            memset(&cv, 0, sizeof(cv));
+            cv.is_matrix = 1;
+            cv.mat.rows = rows;
+            cv.mat.cols = cols;
+
+            printf("  Saisie des elements :\n");
+            for (int i = 0; i < rows; i++) {
+                for (int j = 0; j < cols; j++) {
+                    printf("  Mat%c[%d][%d] = ", 'A' + mat_idx, i+1, j+1);
+                    fflush(stdout);
+                    if (!fgets(line, sizeof(line), stdin)) break;
+                    double val = 0;
+                    sscanf(line, "%lf", &val);
+                    cv.mat.data[i][j] = val;
+                }
+            }
+            mem->mat_vars[mat_idx] = cv;
+            printf("  Mat%c enregistree.\n", 'A' + mat_idx);
+        }
+    }
+}
+
+static void interactive_table_editor(CalcMemory *mem) {
+    char line[256];
+    char expr[MAX_EXPR];
+    double start = 0, end = 0, step = 0;
+
+    printf("\033[H\033[J"); /* Effacer l'ecran */
+    printf("\n  === Mode TABLE ===\n");
+    printf("  f(X) = ");
+    fflush(stdout);
+
+    if (!fgets(line, sizeof(line), stdin)) return;
+    int len = strlen(line);
+    while (len > 0 && (line[len-1] == '\n' || line[len-1] == '\r')) line[--len] = '\0';
+    if (len == 0) return;
+    strncpy(expr, line, MAX_EXPR);
+
+    printf("  Start? ");
+    fflush(stdout);
+    if (!fgets(line, sizeof(line), stdin)) return;
+    start = atof(line);
+
+    printf("  End? ");
+    fflush(stdout);
+    if (!fgets(line, sizeof(line), stdin)) return;
+    end = atof(line);
+
+    printf("  Step? ");
+    fflush(stdout);
+    if (!fgets(line, sizeof(line), stdin)) return;
+    step = atof(line);
+
+    if (step == 0) {
+        printf("  Erreur : Step = 0\n");
+        return;
+    }
+
+    /* Parse expression once */
+    Token tokens[MAX_TOKENS];
+    int count = 0, err_pos = -1;
+    CalcError err = tokenize(expr, tokens, &count, &err_pos);
+    if (err != ERR_NONE) {
+        error_print(err, expr, err_pos);
+        return;
+    }
+
+    Parser p;
+    parser_init(&p, tokens, count, expr);
+    ASTNode *tree = parser_parse(&p);
+    if (!tree) {
+        parser_print_error(&p);
+        return;
+    }
+
+    Table t;
+    table_init(&t);
+    table_set_range(&t, start, end, step);
+
+    int ascending = (step > 0.0);
+    double x = start;
+    int i = 0;
+
+    while (i < TABLE_MAX_POINTS) {
+        if (ascending && x > end + 1e-12) break;
+        if (!ascending && x < end - 1e-12) break;
+
+        /* Assigner la valeur a X */
+        mem->vars['X'-'A'] = cx_make(x, 0.0);
+
+        ComplexValue result = cx_make(0, 0);
+        err = eval(tree, mem, &result);
+        if (err != ERR_NONE) {
+            printf("  Erreur d'evaluation pour X = %g\n", x);
+            ast_free(tree);
+            return;
+        }
+
+        t.points[i].x = x;
+        t.points[i].fx = result.re;
+        i++;
+        x += step;
+    }
+    t.count = i;
+    ast_free(tree);
+
+    table_print(&t, 0);
+
+    printf("\n  Appuyez sur Entree pour quitter l'assistant...");
+    fflush(stdout);
+    fgets(line, sizeof(line), stdin);
+}
+
+static void interactive_eqn_editor(void) {
+    char line[256];
+    
+    while (1) {
+        printf("\033[H\033[J"); /* Effacer l'ecran */
+        printf("\n  === Mode EQN (Equations) ===\n");
+        printf("  1) an X + bn Y = cn        (Systeme 2x2)\n");
+        printf("  2) aX^2 + bX + c = 0       (Quadratique)\n");
+        printf("  3) aX^3 + bX^2 + cX + d = 0 (Cubique)\n");
+        printf("  4) Quitter\n");
+        printf("  > ");
+        fflush(stdout);
+
+        if (!fgets(line, sizeof(line), stdin)) break;
+        int choice = atoi(line);
+
+        if (choice == 4 || choice == 0) break;
+
+        if (choice == 1) {
+            double coeffs[2][3] = {{0}};
+            printf("\n  Saisie des coefficients :\n");
+            for (int i=0; i<2; i++) {
+                printf("  Ligne %d (a b c) > ", i+1);
+                fflush(stdout);
+                if (!fgets(line, sizeof(line), stdin)) break;
+                char *comma = strchr(line, ','); if (comma) *comma = ' ';
+                sscanf(line, "%lf %lf %lf", &coeffs[i][0], &coeffs[i][1], &coeffs[i][2]);
+            }
+            double x=0, y=0;
+            if (eqn_linear2(coeffs, &x, &y)) {
+                printf("\n  Solutions :\n  X = %g\n  Y = %g\n", x, y);
+            } else {
+                printf("\n  Aucune solution unique (Systeme singulier).\n");
+            }
+        } else if (choice == 2) {
+            double a=0, b=0, c=0;
+            printf("\n  Saisie des coefficients a, b, c (separes par un espace) > ");
+            fflush(stdout);
+            if (!fgets(line, sizeof(line), stdin)) break;
+            char *comma = strchr(line, ','); if (comma) *comma = ' ';
+            sscanf(line, "%lf %lf %lf", &a, &b, &c);
+            
+            double r1=0, r2=0;
+            int n = eqn_quadratic(a, b, c, &r1, &r2);
+            if (n == 0) printf("\n  Aucune solution reelle.\n");
+            else if (n == 1) printf("\n  Solution double :\n  X = %g\n", r1);
+            else printf("\n  Solutions :\n  X1 = %g\n  X2 = %g\n", r1, r2);
+        } else if (choice == 3) {
+            double a=0, b=0, c=0, d=0;
+            printf("\n  Saisie des coefficients a, b, c, d (separes par un espace) > ");
+            fflush(stdout);
+            if (!fgets(line, sizeof(line), stdin)) break;
+            char *comma = strchr(line, ','); if (comma) *comma = ' ';
+            sscanf(line, "%lf %lf %lf %lf", &a, &b, &c, &d);
+            
+            double r[3] = {0};
+            int n = eqn_cubic(a, b, c, d, r);
+            if (n == 0) printf("\n  Aucune solution reelle.\n");
+            else {
+                printf("\n  Solutions :\n");
+                for (int i=0; i<n; i++) printf("  X%d = %g\n", i+1, r[i]);
+            }
+        }
+        printf("\n  Appuyez sur Entree pour continuer...");
+        fflush(stdout);
+        fgets(line, sizeof(line), stdin);
+    }
+}
+
 static int cmd_set_mode(const char *modename, CalcMemory *mem) {
     if (strcmp(modename, "comp") == 0) {
         mem->current_mode = MODE_COMP;
@@ -230,21 +474,26 @@ static int cmd_set_mode(const char *modename, CalcMemory *mem) {
     if (strcmp(modename, "mat") == 0) {
         mem->current_mode = MODE_MATRIX;
         printf("  Mode : MAT (Matrices)\n");
+        interactive_matrix_editor(mem);
         return 1;
     }
     if (strcmp(modename, "table") == 0) {
         mem->current_mode = MODE_TABLE;
         printf("  Mode : TABLE (Table de valeurs)\n");
+        interactive_table_editor(mem);
         return 1;
     }
     if (strcmp(modename, "basen") == 0 || strcmp(modename, "base-n") == 0) {
         mem->current_mode = MODE_BASE_N;
+        basen_active_base = 10;
         printf("  Mode : BASE-N (Calcul en base N)\n");
+        printf("  Astuce : Tapez 'hex', 'dec', 'bin', 'oct' pour changer la base d'affichage.\n");
         return 1;
     }
     if (strcmp(modename, "eqn") == 0) {
         mem->current_mode = MODE_EQN;
         printf("  Mode : EQN (Equations)\n");
+        interactive_eqn_editor();
         return 1;
     }
     printf("  Mode inconnu : '%s'\n", modename);
@@ -322,9 +571,38 @@ static void run_expr(const char *expr, CalcMemory *mem) {
 
     /* Mise a jour de Ans et affichage */
     mem->ans = result;
-    /* Activer le mode complexe si la partie imaginaire est non nulle */
-    if (!cx_is_real(result)) mem->complex_mode = 1;
-    eval_print_result(result, mem->complex_mode);
+    if (mem->current_mode == MODE_BASE_N) {
+        long long val = (long long)result.re;
+        if (basen_active_base == 16) {
+            printf("\n  = 0x%llX\n", val);
+        } else if (basen_active_base == 8) {
+            printf("\n  = 0%llo\n", val);
+        } else if (basen_active_base == 2) {
+            char bin[65];
+            int idx = 0;
+            unsigned long long uval = (unsigned long long)val;
+            if (uval == 0) {
+                bin[idx++] = '0';
+            }
+            while (uval > 0) {
+                bin[idx++] = (uval & 1) ? '1' : '0';
+                uval >>= 1;
+            }
+            bin[idx] = '\0';
+            for (int k = 0; k < idx / 2; k++) {
+                char t = bin[k];
+                bin[k] = bin[idx - 1 - k];
+                bin[idx - 1 - k] = t;
+            }
+            printf("\n  = 0b%s\n", bin);
+        } else {
+            printf("\n  = %lld\n", val);
+        }
+    } else {
+        /* Activer le mode complexe si la partie imaginaire est non nulle */
+        if (!cx_is_real(result)) mem->complex_mode = 1;
+        eval_print_result(result, mem->complex_mode);
+    }
     hist_add(expr);
 }
 
@@ -337,6 +615,12 @@ static int handle_command(const char *line, CalcMemory *mem) {
     if (strcmp(line, "exit") == 0 || strcmp(line, "quit") == 0) {
         printf("\n  Au revoir !\n\n");
         exit(0);
+    }
+    if (mem->current_mode == MODE_BASE_N) {
+        if (strcmp(line, "hex") == 0) { basen_active_base = 16; printf("  Mode BASE-N : HEX\n"); return 1; }
+        if (strcmp(line, "dec") == 0) { basen_active_base = 10; printf("  Mode BASE-N : DEC\n"); return 1; }
+        if (strcmp(line, "bin") == 0) { basen_active_base = 2;  printf("  Mode BASE-N : BIN\n"); return 1; }
+        if (strcmp(line, "oct") == 0) { basen_active_base = 8;  printf("  Mode BASE-N : OCT\n"); return 1; }
     }
     if (strcmp(line, "help") == 0) { cmd_help_general(); return 1; }
     if (strncmp(line, "help ", 5) == 0) {
@@ -583,16 +867,27 @@ int main(int argc, char *argv[]) {
     }
 
     /* Mode interactif (EG-06, EG-07) */
+    printf("\033[H\033[J"); /* Effacer l'ecran */
     printf("\n");
-    printf("  ============================================\n");
-    printf("  Calculatrice Scientifique -- Core v1.0\n");
-    printf("  Reference : Casio fx-570ES PLUS\n");
-    printf("  Mode : %s-%s  |  tape 'help' pour l'aide\n", mode_name(mem.current_mode), mem.angle_deg ? "DEG" : "RAD");
-    printf("  ============================================\n\n");
+    printf("  ======================================================\n");
+    printf("         CASIO fx-570ES PLUS SIMULATOR v1.0\n");
+    printf("  ======================================================\n");
+    printf("  Bienvenue ! Tapez 'help' pour l'aide ou 'mode' pour\n");
+    printf("  changer le mode de calcul (COMP, STAT, MATRIX...)\n\n");
+    printf("  Mode Actuel : %s-%s\n", mode_name(mem.current_mode), mem.angle_deg ? "DEG" : "RAD");
+    printf("  ------------------------------------------------------\n\n");
 
     while (1) {
         /* Affichage de l'invite avec le mode actif */
-        printf("[%s-%s] > ", mode_name(mem.current_mode), mem.angle_deg ? "DEG" : "RAD");
+        if (mem.current_mode == MODE_BASE_N) {
+            const char *bname = "DEC";
+            if (basen_active_base == 16) bname = "HEX";
+            else if (basen_active_base == 8) bname = "OCT";
+            else if (basen_active_base == 2) bname = "BIN";
+            printf("[BASE-N-%s] > ", bname);
+        } else {
+            printf("[%s-%s] > ", mode_name(mem.current_mode), mem.angle_deg ? "DEG" : "RAD");
+        }
         fflush(stdout);
 
         if (!fgets(line, MAX_EXPR, stdin)) break;

@@ -54,6 +54,7 @@ static const char *KNOWN_FUNCTIONS[] = {
     "sigma", "prod", "integ", "deriv",
     "switch", "reset", "clr", "deg", "rad",
     "norm", "P", "Q", "R", /* fonctions statistiques continues */
+    "det", "trans", "inv", "dim", "tr", /* fonctions matricielles */
     NULL
 };
 
@@ -61,6 +62,7 @@ static const char *KNOWN_VARIABLES[] = {
     "Ans", "A", "B", "C", "D", "E", "F", "M", "X", "Y",
     "mean", "std", "samp_std", "var", "n", "sum", "min", "max",
     "regA", "regB", "regC",
+    "MatA", "MatB", "MatC",
     NULL
 };
 
@@ -991,6 +993,12 @@ static CalcError eval_depth(const ASTNode *node, CalcMemory *mem,
                 *result = cx_make(stat_reg_B(stat_get_regression_type()), 0);
             } else if (strcmp(node->name, "regC") == 0) {
                 *result = cx_make(stat_reg_C(stat_get_regression_type()), 0);
+            } else if (strcmp(node->name, "MatA") == 0) {
+                *result = mem->mat_vars[0];
+            } else if (strcmp(node->name, "MatB") == 0) {
+                *result = mem->mat_vars[1];
+            } else if (strcmp(node->name, "MatC") == 0) {
+                *result = mem->mat_vars[2];
             } else if (strlen(node->name) == 1 &&
                        node->name[0] >= 'A' && node->name[0] <= 'Z') {
                 *result = mem->vars[node->name[0] - 'A'];
@@ -1004,6 +1012,12 @@ static CalcError eval_depth(const ASTNode *node, CalcMemory *mem,
             if (err != ERR_NONE) return err;
             if (strcmp(node->name, "M") == 0) {
                 mem->mem_M = *result;
+            } else if (strcmp(node->name, "MatA") == 0) {
+                mem->mat_vars[0] = *result;
+            } else if (strcmp(node->name, "MatB") == 0) {
+                mem->mat_vars[1] = *result;
+            } else if (strcmp(node->name, "MatC") == 0) {
+                mem->mat_vars[2] = *result;
             } else if (strlen(node->name) == 1 &&
                        node->name[0] >= 'A' && node->name[0] <= 'Z') {
                 mem->vars[node->name[0] - 'A'] = *result;
@@ -1050,6 +1064,44 @@ static CalcError eval_depth(const ASTNode *node, CalcMemory *mem,
                 double fargs[2] = {lv.re, rv.re};
                 err = eval_function(node->name, fargs, 2, mem, result);
                 return err;
+            }
+
+            if (lv.is_matrix || rv.is_matrix) {
+                if (node->name[0] == '+') {
+                    if (!lv.is_matrix || !rv.is_matrix) return ERR_MATH;
+                    if (lv.mat.rows != rv.mat.rows || lv.mat.cols != rv.mat.cols) return ERR_MATH;
+                    *result = cx_make(0, 0);
+                    result->is_matrix = 1;
+                    result->mat = mat_add(lv.mat, rv.mat);
+                    return ERR_NONE;
+                } else if (node->name[0] == '-') {
+                    if (!lv.is_matrix || !rv.is_matrix) return ERR_MATH;
+                    if (lv.mat.rows != rv.mat.rows || lv.mat.cols != rv.mat.cols) return ERR_MATH;
+                    *result = cx_make(0, 0);
+                    result->is_matrix = 1;
+                    result->mat = mat_sub(lv.mat, rv.mat);
+                    return ERR_NONE;
+                } else if (node->name[0] == '*') {
+                    *result = cx_make(0, 0);
+                    result->is_matrix = 1;
+                    if (lv.is_matrix && rv.is_matrix) {
+                        if (lv.mat.cols != rv.mat.rows) return ERR_MATH;
+                        result->mat = mat_mul(lv.mat, rv.mat);
+                    } else if (lv.is_matrix && !rv.is_matrix) {
+                        result->mat = mat_scalar_mul(lv.mat, rv.re);
+                    } else if (!lv.is_matrix && rv.is_matrix) {
+                        result->mat = mat_scalar_mul(rv.mat, lv.re);
+                    }
+                    return ERR_NONE;
+                } else if (node->name[0] == '/') {
+                    if (rv.is_matrix) return ERR_MATH;
+                    if (rv.re == 0.0 && rv.im == 0.0) return ERR_DIV_ZERO;
+                    *result = cx_make(0, 0);
+                    result->is_matrix = 1;
+                    result->mat = mat_scalar_div(lv.mat, rv.re);
+                    return ERR_NONE;
+                }
+                return ERR_MATH;
             }
 
             switch (node->name[0]) {
@@ -1130,6 +1182,41 @@ static CalcError eval_depth(const ASTNode *node, CalcMemory *mem,
                 }
             }
 
+            if (strcmp(node->name, "det") == 0) {
+                if (node->argc != 1) return ERR_ARGUMENT;
+                if (!cargs[0].is_matrix) return ERR_DOMAIN;
+                if (cargs[0].mat.rows != cargs[0].mat.cols) return ERR_MATH;
+                *result = cx_make(mat_det(cargs[0].mat), 0.0);
+                return ERR_NONE;
+            }
+            if (strcmp(node->name, "tr") == 0) {
+                if (node->argc != 1) return ERR_ARGUMENT;
+                if (!cargs[0].is_matrix) return ERR_DOMAIN;
+                if (cargs[0].mat.rows != cargs[0].mat.cols) return ERR_MATH;
+                *result = cx_make(mat_tr(cargs[0].mat), 0.0);
+                return ERR_NONE;
+            }
+            if (strcmp(node->name, "trans") == 0) {
+                if (node->argc != 1) return ERR_ARGUMENT;
+                if (!cargs[0].is_matrix) return ERR_DOMAIN;
+                *result = cx_make(0, 0);
+                result->is_matrix = 1;
+                result->mat = mat_trans(cargs[0].mat);
+                return ERR_NONE;
+            }
+            if (strcmp(node->name, "inv") == 0) {
+                if (node->argc != 1) return ERR_ARGUMENT;
+                if (!cargs[0].is_matrix) return ERR_DOMAIN;
+                if (cargs[0].mat.rows != cargs[0].mat.cols) return ERR_MATH;
+                int success;
+                Matrix inv = mat_inv(cargs[0].mat, &success);
+                if (!success) return ERR_MATH;
+                *result = cx_make(0, 0);
+                result->is_matrix = 1;
+                result->mat = inv;
+                return ERR_NONE;
+            }
+
             /* FIX 5: convertir ComplexValue → double[] pour eval_function */
             double real_args[16];
             int    all_real = 1;
@@ -1150,6 +1237,18 @@ static CalcError eval_depth(const ASTNode *node, CalcMemory *mem,
 }
 
 void eval_print_result(ComplexValue result, int complex_mode) {
+    if (result.is_matrix) {
+        printf("\n");
+        for (int i = 0; i < result.mat.rows; i++) {
+            printf("  [ ");
+            for (int j = 0; j < result.mat.cols; j++) {
+                printf("%g ", result.mat.data[i][j]);
+            }
+            printf("]\n");
+        }
+        return;
+    }
+
     if (fabs(result.re) < 1e-10) result.re = 0.0;
     if (fabs(result.im) < 1e-10) result.im = 0.0;
 

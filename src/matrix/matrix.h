@@ -13,7 +13,13 @@
 
 typedef struct { int rows; int cols; double data[4][4]; } Matrix;
 Matrix   mat_add(Matrix a, Matrix b);
+Matrix   mat_sub(Matrix a, Matrix b);
 Matrix   mat_mul(Matrix a, Matrix b);
+Matrix   mat_scalar_mul(Matrix a, double scalar);
+Matrix   mat_scalar_div(Matrix a, double scalar);
 double   mat_det(Matrix m);
+Matrix   mat_trans(Matrix m);
+double   mat_tr(Matrix m);
+Matrix   mat_inv(Matrix m, int *success);
 
 #endif /* CALC_MATRIX_H */

@@ -7,6 +7,7 @@
 #include <math.h>
 #include <float.h>
 #include <ctype.h>
+#include "matrix.h"
 
 /* =========================================================
  * errors.h -- Gestion des erreurs (F-CO-07 a F-CO-11)
@@ -45,8 +46,10 @@ typedef enum {
  * ========================================================= */
 
 typedef struct {
+    int is_matrix;
     double re;    /* partie reelle      */
     double im;    /* partie imaginaire  */
+    Matrix mat;
 } ComplexValue;
 
 /* Fonctions utilitaires complexes */
@@ -170,6 +173,7 @@ void     parser_print_error(const Parser *p);
 
 typedef struct {
     ComplexValue vars[NB_VARS];  /* variables A-Z (peuvent etre complexes) */
+    ComplexValue mat_vars[3];    /* MatA, MatB, MatC                       */
     ComplexValue mem_M;          /* memoire independante M                 */
     ComplexValue ans;            /* derniere reponse (Ans)                 */
     int          angle_deg;      /* 1 = degres, 0 = radians                */

@@ -22,6 +22,47 @@ Matrix mat_add(Matrix a, Matrix b) {
     return result;
 }
 
+/* Soustraction de deux matrices */
+Matrix mat_sub(Matrix a, Matrix b) {
+    Matrix result;
+    result.rows = a.rows;
+    result.cols = a.cols;
+
+    for (int i = 0; i < a.rows; i++)
+        for (int j = 0; j < a.cols; j++)
+            result.data[i][j] = a.data[i][j] - b.data[i][j];
+
+    return result;
+}
+
+/* Multiplication par un scalaire */
+Matrix mat_scalar_mul(Matrix a, double scalar) {
+    Matrix result;
+    result.rows = a.rows;
+    result.cols = a.cols;
+
+    for (int i = 0; i < a.rows; i++)
+        for (int j = 0; j < a.cols; j++)
+            result.data[i][j] = a.data[i][j] * scalar;
+
+    return result;
+}
+
+/* Division par un scalaire */
+Matrix mat_scalar_div(Matrix a, double scalar) {
+    Matrix result;
+    result.rows = a.rows;
+    result.cols = a.cols;
+
+    if (scalar == 0) return a; /* Eviter crash, gere par le moteur */
+
+    for (int i = 0; i < a.rows; i++)
+        for (int j = 0; j < a.cols; j++)
+            result.data[i][j] = a.data[i][j] / scalar;
+
+    return result;
+}
+
 /* Multiplication de deux matrices */
 Matrix mat_mul(Matrix a, Matrix b) {
     Matrix result;
@@ -76,4 +117,61 @@ double mat_det(Matrix m) {
         det += sign * m.data[0][j] * mat_det(sub);
     }
     return det;
+}
+
+/* Transposee */
+Matrix mat_trans(Matrix m) {
+    Matrix result;
+    result.rows = m.cols;
+    result.cols = m.rows;
+    for (int i = 0; i < m.rows; i++)
+        for (int j = 0; j < m.cols; j++)
+            result.data[j][i] = m.data[i][j];
+    return result;
+}
+
+/* Trace */
+double mat_tr(Matrix m) {
+    double sum = 0.0;
+    int n = (m.rows < m.cols) ? m.rows : m.cols;
+    for (int i = 0; i < n; i++) sum += m.data[i][i];
+    return sum;
+}
+
+/* Comatrice (pour l'inverse) */
+static Matrix mat_comatrix(Matrix m) {
+    Matrix result;
+    result.rows = m.rows;
+    result.cols = m.cols;
+    for (int i = 0; i < m.rows; i++) {
+        for (int j = 0; j < m.cols; j++) {
+            Matrix sub = sub_matrix(m, i, j);
+            double sign = ((i + j) % 2 == 0) ? 1.0 : -1.0;
+            result.data[i][j] = sign * mat_det(sub);
+        }
+    }
+    return result;
+}
+
+/* Inverse */
+Matrix mat_inv(Matrix m, int *success) {
+    Matrix result;
+    result.rows = m.rows;
+    result.cols = m.cols;
+    
+    double det = mat_det(m);
+    if (fabs(det) < 1e-12) {
+        *success = 0;
+        return result;
+    }
+    
+    *success = 1;
+    if (m.rows == 1) {
+        result.data[0][0] = 1.0 / m.data[0][0];
+        return result;
+    }
+    
+    Matrix comat = mat_comatrix(m);
+    Matrix adj = mat_trans(comat);
+    return mat_scalar_div(adj, det);
 }
